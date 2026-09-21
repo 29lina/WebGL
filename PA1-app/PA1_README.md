@@ -48,7 +48,7 @@ gl.drawArrays(gl.LINE_STRIP, first, count)
 
 ## Screenshot
 
-![Variant 17](screenshots/pa1-variant17.png)
+![Variant 17](screenshots/pa1-variant17.jpg)
 
 ## Video
 
