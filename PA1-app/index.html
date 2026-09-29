@@ -11,7 +11,7 @@
   >
 
   <title>
-    PA1 - Surface of Revolution of a General Sinusoid
+    PA2 - Phong Shading - Variant 17
   </title>
 
   <style>
@@ -28,8 +28,7 @@
         Arial,
         sans-serif;
 
-      background:
-        #f7f7fa;
+      background: #f7f7fa;
     }
 
     #glCanvas {
@@ -45,21 +44,22 @@
       cursor: grabbing;
     }
 
-    #info {
+    #controls {
       position: fixed;
 
       top: 16px;
       left: 16px;
 
-      padding:
-        10px 14px;
+      width: 300px;
+
+      padding: 14px 16px;
 
       background:
         rgba(
           255,
           255,
           255,
-          0.88
+          0.92
         );
 
       border:
@@ -71,13 +71,50 @@
           0.12
         );
 
-      border-radius: 8px;
+      border-radius: 10px;
 
-      line-height: 1.4;
+      line-height: 1.45;
 
       font-size: 14px;
 
-      pointer-events: none;
+      box-shadow:
+        0 4px 18px
+        rgba(
+          0,
+          0,
+          0,
+          0.08
+        );
+    }
+
+    #controls strong {
+      font-size: 16px;
+    }
+
+    .slider-row {
+      margin-top: 12px;
+    }
+
+    .slider-row label {
+      display: flex;
+
+      justify-content: space-between;
+
+      margin-bottom: 4px;
+
+      font-weight: bold;
+    }
+
+    .slider-row input {
+      width: 100%;
+    }
+
+    .hint {
+      margin-top: 12px;
+
+      font-size: 13px;
+
+      color: #555;
     }
   </style>
 </head>
@@ -88,32 +125,71 @@
     id="glCanvas"
   ></canvas>
 
-  <div id="info">
+  <div id="controls">
 
     <strong>
-      PA1 - Variant 17
+      PA2 - Variant 17
     </strong>
 
     <br>
 
-    Surface of Revolution
-    of a General Sinusoid
+    Phong shading
 
     <br>
 
-    a = 1,
-    n = 6,
-    R = 3
+    Facet Average vertex normals
 
     <br>
 
-    U-curves - blue,
-    V-curves - orange
+    Filled indexed triangles
 
-    <br>
+    <div class="slider-row">
 
-    Drag - rotate,
-    mouse wheel - zoom
+      <label>
+        <span>U granularity</span>
+
+        <span id="uValue">
+          40
+        </span>
+      </label>
+
+      <input
+        id="uSlider"
+        type="range"
+        min="4"
+        max="150"
+        value="40"
+        step="1"
+      >
+
+    </div>
+
+    <div class="slider-row">
+
+      <label>
+        <span>V granularity</span>
+
+        <span id="vValue">
+          64
+        </span>
+      </label>
+
+      <input
+        id="vSlider"
+        type="range"
+        min="8"
+        max="150"
+        value="64"
+        step="1"
+      >
+
+    </div>
+
+    <div class="hint">
+      Drag - rotate<br>
+      Mouse wheel - zoom<br>
+      Light source rotates automatically
+    </div>
 
   </div>
 

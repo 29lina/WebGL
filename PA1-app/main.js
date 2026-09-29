@@ -6,7 +6,9 @@ import {
   mat4LookAt,
   mat4RotationX,
   mat4RotationY,
+  mat4TransformPoint,
 } from './math.js';
+
 
 const canvas =
   document.getElementById(
@@ -14,7 +16,9 @@ const canvas =
   );
 
 const gl =
-  canvas.getContext('webgl');
+  canvas.getContext(
+    'webgl'
+  );
 
 if (!gl) {
   throw new Error(
@@ -22,52 +26,179 @@ if (!gl) {
   );
 }
 
-/*
- * Very simple vertex shader.
- * It receives one 3D vertex
- * and transforms it by the
- * Model-View-Projection matrix.
- */
+
+const uSlider =
+  document.getElementById(
+    'uSlider'
+  );
+
+const vSlider =
+  document.getElementById(
+    'vSlider'
+  );
+
+const uValue =
+  document.getElementById(
+    'uValue'
+  );
+
+const vValue =
+  document.getElementById(
+    'vValue'
+  );
+
+
+// Vertex shader
 const vertexShaderSource = `
   attribute vec3 aPosition;
+  attribute vec3 aNormal;
 
-  uniform mat4 uMVP;
+  uniform mat4 uModelView;
+  uniform mat4 uProjection;
+
+  varying vec3 vPositionView;
+  varying vec3 vNormalView;
 
   void main() {
-    gl_Position =
-      uMVP *
+    vec4 positionView =
+      uModelView *
       vec4(aPosition, 1.0);
+
+    vPositionView =
+      positionView.xyz;
+
+    vNormalView =
+      normalize(
+        mat3(uModelView) *
+        aNormal
+      );
+
+    gl_Position =
+      uProjection *
+      positionView;
   }
 `;
 
-/*
- * Fragment shader.
- * U- and V-curves receive
- * different colors.
- */
+
+// Fragment shader with Phong shading
 const fragmentShaderSource = `
   precision mediump float;
 
-  uniform vec4 uColor;
+  uniform vec3 uLightPositionView;
+  uniform vec3 uBaseColor;
+
+  varying vec3 vPositionView;
+  varying vec3 vNormalView;
 
   void main() {
-    gl_FragColor = uColor;
+    vec3 N =
+      normalize(
+        vNormalView
+      );
+
+    vec3 L =
+      normalize(
+        uLightPositionView -
+        vPositionView
+      );
+
+    vec3 V =
+      normalize(
+        -vPositionView
+      );
+
+
+    // Ambient
+    vec3 ambient =
+      0.18 *
+      uBaseColor;
+
+
+    // Diffuse
+    float diffuseFactor =
+      max(
+        dot(
+          N,
+          L
+        ),
+        0.0
+      );
+
+    vec3 diffuse =
+      0.75 *
+      diffuseFactor *
+      uBaseColor;
+
+
+    // Specular
+    float specularFactor =
+      0.0;
+
+    if (
+      diffuseFactor > 0.0
+    ) {
+      vec3 R =
+        reflect(
+          -L,
+          N
+        );
+
+      specularFactor =
+        pow(
+          max(
+            dot(
+              R,
+              V
+            ),
+            0.0
+          ),
+          32.0
+        );
+    }
+
+    vec3 specular =
+      0.65 *
+      specularFactor *
+      vec3(
+        1.0,
+        1.0,
+        1.0
+      );
+
+
+    vec3 finalColor =
+      ambient +
+      diffuse +
+      specular;
+
+
+    gl_FragColor =
+      vec4(
+        finalColor,
+        1.0
+      );
   }
 `;
 
+
+// Compile shader
 function createShader(
   type,
   source
 ) {
   const shader =
-    gl.createShader(type);
+    gl.createShader(
+      type
+    );
 
   gl.shaderSource(
     shader,
     source
   );
 
-  gl.compileShader(shader);
+  gl.compileShader(
+    shader
+  );
 
   if (
     !gl.getShaderParameter(
@@ -76,9 +207,13 @@ function createShader(
     )
   ) {
     const message =
-      gl.getShaderInfoLog(shader);
+      gl.getShaderInfoLog(
+        shader
+      );
 
-    gl.deleteShader(shader);
+    gl.deleteShader(
+      shader
+    );
 
     throw new Error(
       `Shader compile error: ${message}`
@@ -88,6 +223,8 @@ function createShader(
   return shader;
 }
 
+
+// Create shader program
 function createProgram(
   vertexSource,
   fragmentSource
@@ -117,7 +254,9 @@ function createProgram(
     fragmentShader
   );
 
-  gl.linkProgram(program);
+  gl.linkProgram(
+    program
+  );
 
   if (
     !gl.getProgramParameter(
@@ -130,24 +269,33 @@ function createProgram(
         program
       );
 
-    gl.deleteProgram(program);
+    gl.deleteProgram(
+      program
+    );
 
     throw new Error(
       `Program link error: ${message}`
     );
   }
 
-  gl.deleteShader(vertexShader);
-  gl.deleteShader(fragmentShader);
+  gl.deleteShader(
+    vertexShader
+  );
+
+  gl.deleteShader(
+    fragmentShader
+  );
 
   return program;
 }
+
 
 const program =
   createProgram(
     vertexShaderSource,
     fragmentShaderSource
   );
+
 
 const programInfo = {
   program,
@@ -158,59 +306,140 @@ const programInfo = {
         program,
         'aPosition'
       ),
+
+    normal:
+      gl.getAttribLocation(
+        program,
+        'aNormal'
+      ),
   },
 
   uniformLocations: {
-    mvp:
+    modelView:
       gl.getUniformLocation(
         program,
-        'uMVP'
+        'uModelView'
       ),
 
-    color:
+    projection:
       gl.getUniformLocation(
         program,
-        'uColor'
+        'uProjection'
+      ),
+
+    lightPositionView:
+      gl.getUniformLocation(
+        program,
+        'uLightPositionView'
+      ),
+
+    baseColor:
+      gl.getUniformLocation(
+        program,
+        'uBaseColor'
       ),
   },
 };
 
-/*
- * Create Variant 17 model.
- */
-const model =
-  new Model(gl, {
-    a: 1.0,
-    n: 6,
-    R: 3.0,
 
-    uCurveCount: 28,
-    vCurveCount: 19,
+// Create initial model
+let model =
+  new Model(
+    gl,
+    {
+      a: 1.0,
+      n: 6,
+      R: 3.0,
 
-    uSamples: 120,
-    vSamples: 120,
-  });
+      uSegments:
+        Number(
+          uSlider.value
+        ),
 
-/*
- * Initial view.
- */
-let rotationX = -0.95;
-let rotationY = 0.65;
+      vSegments:
+        Number(
+          vSlider.value
+        ),
+    }
+  );
 
-let cameraDistance = 8.0;
 
-/*
- * Mouse control.
- */
-let dragging = false;
+// Rebuild model after slider change
+function rebuildModel() {
+  const uSegments =
+    Number(
+      uSlider.value
+    );
 
-let previousMouseX = 0;
-let previousMouseY = 0;
+  const vSegments =
+    Number(
+      vSlider.value
+    );
+
+  uValue.textContent =
+    uSegments;
+
+  vValue.textContent =
+    vSegments;
+
+  model.dispose();
+
+  model =
+    new Model(
+      gl,
+      {
+        a: 1.0,
+        n: 6,
+        R: 3.0,
+
+        uSegments:
+          uSegments,
+
+        vSegments:
+          vSegments,
+      }
+    );
+}
+
+
+uSlider.addEventListener(
+  'input',
+  rebuildModel
+);
+
+vSlider.addEventListener(
+  'input',
+  rebuildModel
+);
+
+
+// Initial view
+let rotationX =
+  -0.95;
+
+let rotationY =
+  0.65;
+
+let cameraDistance =
+  8.0;
+
+
+// Mouse rotation
+let dragging =
+  false;
+
+let previousMouseX =
+  0;
+
+let previousMouseY =
+  0;
+
 
 canvas.addEventListener(
   'mousedown',
   (event) => {
-    dragging = true;
+    dragging =
+      true;
 
     previousMouseX =
       event.clientX;
@@ -220,12 +449,15 @@ canvas.addEventListener(
   }
 );
 
+
 window.addEventListener(
   'mouseup',
   () => {
-    dragging = false;
+    dragging =
+      false;
   }
 );
+
 
 window.addEventListener(
   'mousemove',
@@ -242,8 +474,11 @@ window.addEventListener(
       event.clientY -
       previousMouseY;
 
-    rotationY += dx * 0.01;
-    rotationX += dy * 0.01;
+    rotationY +=
+      dx * 0.01;
+
+    rotationX +=
+      dy * 0.01;
 
     previousMouseX =
       event.clientX;
@@ -253,16 +488,16 @@ window.addEventListener(
   }
 );
 
-/*
- * Mouse wheel = zoom.
- */
+
+// Mouse wheel zoom
 canvas.addEventListener(
   'wheel',
   (event) => {
     event.preventDefault();
 
     cameraDistance +=
-      event.deltaY * 0.01;
+      event.deltaY *
+      0.01;
 
     cameraDistance =
       Math.max(
@@ -273,37 +508,46 @@ canvas.addEventListener(
         )
       );
   },
+
   {
     passive: false,
   }
 );
 
+
+// Resize canvas
 function resizeCanvasToDisplaySize() {
   const pixelRatio =
-    window.devicePixelRatio || 1;
+    window.devicePixelRatio ||
+    1;
 
   const width =
     Math.floor(
       canvas.clientWidth *
-        pixelRatio
+      pixelRatio
     );
 
   const height =
     Math.floor(
       canvas.clientHeight *
-        pixelRatio
+      pixelRatio
     );
 
   if (
     canvas.width !== width ||
     canvas.height !== height
   ) {
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width =
+      width;
+
+    canvas.height =
+      height;
   }
 }
 
-function render() {
+
+// Render scene
+function render(time) {
   resizeCanvasToDisplaySize();
 
   gl.viewport(
@@ -313,12 +557,12 @@ function render() {
     canvas.height
   );
 
-  /*
-   * Depth test is important because
-   * the surface is three-dimensional.
-   */
   gl.enable(
     gl.DEPTH_TEST
+  );
+
+  gl.disable(
+    gl.CULL_FACE
   );
 
   gl.clearColor(
@@ -337,6 +581,7 @@ function render() {
     programInfo.program
   );
 
+
   const aspect =
     canvas.width /
     canvas.height;
@@ -349,12 +594,26 @@ function render() {
       100.0
     );
 
+
   const view =
     mat4LookAt(
-      [0, 0, cameraDistance],
-      [0, 0, 0],
-      [0, 1, 0]
+      [
+        0,
+        0,
+        cameraDistance
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ]
     );
+
 
   const rotateX =
     mat4RotationX(
@@ -372,26 +631,94 @@ function render() {
       rotateX
     );
 
-  const viewModel =
+  const modelView =
     mat4Multiply(
       view,
       modelMatrix
     );
 
-  const mvp =
-    mat4Multiply(
-      projection,
-      viewModel
+
+  // Moving point light
+  const seconds =
+    time * 0.001;
+
+  const lightRadius =
+    5.0;
+
+  const lightModel = [
+    lightRadius *
+      Math.cos(
+        seconds
+      ),
+
+    lightRadius *
+      Math.sin(
+        seconds
+      ),
+
+    3.5,
+  ];
+
+
+  // Transform light to view coordinates
+  const lightView =
+    mat4TransformPoint(
+      modelView,
+      lightModel
     );
 
-  model.draw(
-    programInfo,
-    mvp
+
+  gl.uniformMatrix4fv(
+    programInfo
+      .uniformLocations
+      .modelView,
+    false,
+    modelView
   );
+
+
+  gl.uniformMatrix4fv(
+    programInfo
+      .uniformLocations
+      .projection,
+    false,
+    projection
+  );
+
+
+  gl.uniform3f(
+    programInfo
+      .uniformLocations
+      .lightPositionView,
+
+    lightView[0],
+    lightView[1],
+    lightView[2]
+  );
+
+
+  gl.uniform3f(
+    programInfo
+      .uniformLocations
+      .baseColor,
+
+    0.25,
+    0.55,
+    0.90
+  );
+
+
+  model.draw(
+    programInfo
+  );
+
 
   requestAnimationFrame(
     render
   );
 }
 
-render();
+
+requestAnimationFrame(
+  render
+);

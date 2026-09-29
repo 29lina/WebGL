@@ -160,3 +160,30 @@ export function mat4RotationY(angle) {
     0, 0, 0, 1,
   ]);
 }
+
+// Transform a 3D point by a 4x4 matrix
+export function mat4TransformPoint(
+  matrix,
+  point
+) {
+  const x = point[0];
+  const y = point[1];
+  const z = point[2];
+
+  return [
+    matrix[0] * x +
+      matrix[4] * y +
+      matrix[8] * z +
+      matrix[12],
+
+    matrix[1] * x +
+      matrix[5] * y +
+      matrix[9] * z +
+      matrix[13],
+
+    matrix[2] * x +
+      matrix[6] * y +
+      matrix[10] * z +
+      matrix[14],
+  ];
+}

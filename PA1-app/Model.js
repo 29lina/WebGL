@@ -1,194 +1,480 @@
 /**
- * PA1 - Variant 17
+ * PA2 - Variant 17
  * Surface of Revolution of a General Sinusoid
  *
- * Parameters:
- *   u = r
- *   v = beta
- *
- * Surface:
- *   x(u, v) = u * cos(v)
- *   y(u, v) = u * sin(v)
- *   z(u, v) = a * cos(n * PI * u / R)
- *
- * U-curves:
- *   v = const, u changes from 0 to R
- *
- * V-curves:
- *   u = const, v changes from 0 to 2*PI
+ * Phong shading
+ * Facet Average vertex normals
  */
 
 export class Model {
   constructor(gl, options = {}) {
     this.gl = gl;
 
-    // Parameters of the analytical surface
     this.a = options.a ?? 1.0;
     this.n = options.n ?? 6;
     this.R = options.R ?? 3.0;
 
-    // Number of separate U- and V-curves
-    this.uCurveCount = options.uCurveCount ?? 28;
-    this.vCurveCount = options.vCurveCount ?? 19;
+    this.uSegments =
+      options.uSegments ?? 40;
 
-    // Number of samples inside each polyline
-    this.uSamples = options.uSamples ?? 120;
-    this.vSamples = options.vSamples ?? 120;
+    this.vSegments =
+      options.vSegments ?? 64;
 
-    /*
-     * Two separate sets of vertices.
-     *
-     * Every three numbers represent one 3D vertex:
-     * [x0, y0, z0, x1, y1, z1, ...]
-     */
-    this.uVertices = [];
-    this.vVertices = [];
+    this.positions = [];
+    this.normals = [];
+    this.indices = [];
 
-    /*
-     * Ranges tell WebGL where each individual polyline
-     * begins inside the corresponding vertex array.
-     *
-     * Example:
-     * { first: 0, count: 121 }
-     */
-    this.uRanges = [];
-    this.vRanges = [];
+    this.buildGeometry();
 
-    this.buildUCurves();
-    this.buildVCurves();
+    this.positionData =
+      new Float32Array(
+        this.positions
+      );
 
-    /*
-     * WebGL works efficiently with typed arrays,
-     * so normal JavaScript arrays are converted
-     * to Float32Array before uploading to GPU.
-     */
-    this.uVertexData = new Float32Array(this.uVertices);
-    this.vVertexData = new Float32Array(this.vVertices);
+    this.normalData =
+      new Float32Array(
+        this.normals
+      );
 
-    // Two separate GPU vertex buffers
-    this.uBuffer = this.createBuffer(this.uVertexData);
-    this.vBuffer = this.createBuffer(this.vVertexData);
+    this.indexData =
+      new Uint16Array(
+        this.indices
+      );
+
+    this.positionBuffer =
+      this.createArrayBuffer(
+        this.positionData
+      );
+
+    this.normalBuffer =
+      this.createArrayBuffer(
+        this.normalData
+      );
+
+    this.indexBuffer =
+      this.createIndexBuffer(
+        this.indexData
+      );
+
+    this.indexCount =
+      this.indexData.length;
   }
 
-  /**
-   * Calculates one point of the analytical surface.
-   */
+
+  // Calculate one point of the surface
   surfacePoint(u, v) {
-    const x = u * Math.cos(v);
-    const y = u * Math.sin(v);
+    const x =
+      u * Math.cos(v);
+
+    const y =
+      u * Math.sin(v);
 
     const z =
       this.a *
       Math.cos(
-        (this.n * Math.PI * u) / this.R
+        (
+          this.n *
+          Math.PI *
+          u
+        ) /
+        this.R
       );
 
     return [x, y, z];
   }
 
-  /**
-   * U-curves.
-   *
-   * v remains constant.
-   * u changes from 0 to R.
-   *
-   * These curves correspond to meridians.
-   */
-  buildUCurves() {
-    for (
-      let line = 0;
-      line < this.uCurveCount;
-      line++
-    ) {
-      const v =
-        (2 * Math.PI * line) /
-        this.uCurveCount;
 
-      const first =
-        this.uVertices.length / 3;
+  // Get vertex index on a ring
+  ringIndex(ring, vIndex) {
+    const wrappedV =
+      (
+        vIndex +
+        this.vSegments
+      ) %
+      this.vSegments;
 
-      for (
-        let sample = 0;
-        sample <= this.uSamples;
-        sample++
-      ) {
-        const u =
-          (this.R * sample) /
-          this.uSamples;
-
-        const [x, y, z] =
-          this.surfacePoint(u, v);
-
-        this.uVertices.push(x, y, z);
-      }
-
-      this.uRanges.push({
-        first: first,
-        count: this.uSamples + 1,
-      });
-    }
+    return (
+      1 +
+      (ring - 1) *
+      this.vSegments +
+      wrappedV
+    );
   }
 
-  /**
-   * V-curves.
-   *
-   * u remains constant.
-   * v changes from 0 to 2*PI.
-   *
-   * These curves correspond to parallels.
-   */
-  buildVCurves() {
-    /*
-     * Start at line = 1 instead of 0 because
-     * u = 0 would produce a degenerate circle:
-     * all its points would be identical.
-     */
+
+  // Build vertices and triangle indices
+  buildGeometry() {
+    const center =
+      this.surfacePoint(
+        0,
+        0
+      );
+
+    this.positions.push(
+      center[0],
+      center[1],
+      center[2]
+    );
+
+
+    // Build surface rings
     for (
-      let line = 1;
-      line <= this.vCurveCount;
-      line++
+      let i = 1;
+      i <= this.uSegments;
+      i++
     ) {
       const u =
-        (this.R * line) /
-        this.vCurveCount;
-
-      const first =
-        this.vVertices.length / 3;
+        (
+          this.R *
+          i
+        ) /
+        this.uSegments;
 
       for (
-        let sample = 0;
-        sample <= this.vSamples;
-        sample++
+        let j = 0;
+        j < this.vSegments;
+        j++
       ) {
-        /*
-         * The last point has v = 2*PI.
-         * It coincides with v = 0 and therefore
-         * closes the circular polyline.
-         */
         const v =
-          (2 * Math.PI * sample) /
-          this.vSamples;
+          (
+            2 *
+            Math.PI *
+            j
+          ) /
+          this.vSegments;
 
-        const [x, y, z] =
-          this.surfacePoint(u, v);
+        const point =
+          this.surfacePoint(
+            u,
+            v
+          );
 
-        this.vVertices.push(x, y, z);
+        this.positions.push(
+          point[0],
+          point[1],
+          point[2]
+        );
+      }
+    }
+
+
+    // Triangles around the centre
+    for (
+      let j = 0;
+      j < this.vSegments;
+      j++
+    ) {
+      const current =
+        this.ringIndex(
+          1,
+          j
+        );
+
+      const next =
+        this.ringIndex(
+          1,
+          j + 1
+        );
+
+      this.indices.push(
+        0,
+        current,
+        next
+      );
+    }
+
+
+    // Triangles between neighbouring rings
+    for (
+      let i = 1;
+      i < this.uSegments;
+      i++
+    ) {
+      for (
+        let j = 0;
+        j < this.vSegments;
+        j++
+      ) {
+        const a =
+          this.ringIndex(
+            i,
+            j
+          );
+
+        const b =
+          this.ringIndex(
+            i + 1,
+            j
+          );
+
+        const c =
+          this.ringIndex(
+            i + 1,
+            j + 1
+          );
+
+        const d =
+          this.ringIndex(
+            i,
+            j + 1
+          );
+
+        this.indices.push(
+          a,
+          b,
+          c
+        );
+
+        this.indices.push(
+          a,
+          c,
+          d
+        );
+      }
+    }
+
+
+    this.calculateFacetAverageNormals();
+  }
+
+
+  // Calculate Facet Average normals
+  calculateFacetAverageNormals() {
+    const vertexCount =
+      this.positions.length / 3;
+
+    this.normals =
+      new Array(
+        vertexCount * 3
+      ).fill(0);
+
+
+    for (
+      let i = 0;
+      i < this.indices.length;
+      i += 3
+    ) {
+      const ia =
+        this.indices[i];
+
+      const ib =
+        this.indices[i + 1];
+
+      const ic =
+        this.indices[i + 2];
+
+
+      const ax =
+        this.positions[
+          ia * 3
+        ];
+
+      const ay =
+        this.positions[
+          ia * 3 + 1
+        ];
+
+      const az =
+        this.positions[
+          ia * 3 + 2
+        ];
+
+
+      const bx =
+        this.positions[
+          ib * 3
+        ];
+
+      const by =
+        this.positions[
+          ib * 3 + 1
+        ];
+
+      const bz =
+        this.positions[
+          ib * 3 + 2
+        ];
+
+
+      const cx =
+        this.positions[
+          ic * 3
+        ];
+
+      const cy =
+        this.positions[
+          ic * 3 + 1
+        ];
+
+      const cz =
+        this.positions[
+          ic * 3 + 2
+        ];
+
+
+      // Triangle edges
+      const abx =
+        bx - ax;
+
+      const aby =
+        by - ay;
+
+      const abz =
+        bz - az;
+
+
+      const acx =
+        cx - ax;
+
+      const acy =
+        cy - ay;
+
+      const acz =
+        cz - az;
+
+
+      // Cross product
+      let nx =
+        aby * acz -
+        abz * acy;
+
+      let ny =
+        abz * acx -
+        abx * acz;
+
+      let nz =
+        abx * acy -
+        aby * acx;
+
+
+      // Normalize facet normal
+      const length =
+        Math.hypot(
+          nx,
+          ny,
+          nz
+        );
+
+      if (length < 1e-8) {
+        continue;
       }
 
-      this.vRanges.push({
-        first: first,
-        count: this.vSamples + 1,
-      });
+      nx /= length;
+      ny /= length;
+      nz /= length;
+
+
+      // Add normal to all triangle vertices
+      this.addNormal(
+        ia,
+        nx,
+        ny,
+        nz
+      );
+
+      this.addNormal(
+        ib,
+        nx,
+        ny,
+        nz
+      );
+
+      this.addNormal(
+        ic,
+        nx,
+        ny,
+        nz
+      );
+    }
+
+
+    // Normalize vertex normals
+    for (
+      let vertex = 0;
+      vertex < vertexCount;
+      vertex++
+    ) {
+      const offset =
+        vertex * 3;
+
+      let nx =
+        this.normals[
+          offset
+        ];
+
+      let ny =
+        this.normals[
+          offset + 1
+        ];
+
+      let nz =
+        this.normals[
+          offset + 2
+        ];
+
+      const length =
+        Math.hypot(
+          nx,
+          ny,
+          nz
+        );
+
+      if (length > 1e-8) {
+        nx /= length;
+        ny /= length;
+        nz /= length;
+      } else {
+        nx = 0;
+        ny = 0;
+        nz = 1;
+      }
+
+      this.normals[
+        offset
+      ] = nx;
+
+      this.normals[
+        offset + 1
+      ] = ny;
+
+      this.normals[
+        offset + 2
+      ] = nz;
     }
   }
 
-  /**
-   * Creates one WebGL ARRAY_BUFFER.
-   */
-  createBuffer(data) {
-    const gl = this.gl;
 
-    const buffer = gl.createBuffer();
+  // Add normal contribution to one vertex
+  addNormal(
+    vertexIndex,
+    nx,
+    ny,
+    nz
+  ) {
+    const offset =
+      vertexIndex * 3;
+
+    this.normals[
+      offset
+    ] += nx;
+
+    this.normals[
+      offset + 1
+    ] += ny;
+
+    this.normals[
+      offset + 2
+    ] += nz;
+  }
+
+
+  // Create VBO
+  createArrayBuffer(data) {
+    const gl =
+      this.gl;
+
+    const buffer =
+      gl.createBuffer();
 
     gl.bindBuffer(
       gl.ARRAY_BUFFER,
@@ -204,74 +490,117 @@ export class Model {
     return buffer;
   }
 
-  /**
-   * Draws both curve families.
-   */
-  draw(programInfo, mvpMatrix) {
-    const gl = this.gl;
 
-    gl.uniformMatrix4fv(
-      programInfo.uniformLocations.mvp,
-      false,
-      mvpMatrix
-    );
+  // Create index buffer
+  createIndexBuffer(data) {
+    const gl =
+      this.gl;
 
-    gl.enableVertexAttribArray(
-      programInfo.attribLocations.position
-    );
-
-    // U-curves - blue
-    this.drawCurveFamily(
-      this.uBuffer,
-      this.uRanges,
-      programInfo,
-      [0.05, 0.25, 0.70, 1.0]
-    );
-
-    // V-curves - orange
-    this.drawCurveFamily(
-      this.vBuffer,
-      this.vRanges,
-      programInfo,
-      [0.85, 0.25, 0.10, 1.0]
-    );
-  }
-
-  /**
-   * Draws all polylines of one family.
-   */
-  drawCurveFamily(
-    buffer,
-    ranges,
-    programInfo,
-    color
-  ) {
-    const gl = this.gl;
+    const buffer =
+      gl.createBuffer();
 
     gl.bindBuffer(
-      gl.ARRAY_BUFFER,
+      gl.ELEMENT_ARRAY_BUFFER,
       buffer
     );
 
+    gl.bufferData(
+      gl.ELEMENT_ARRAY_BUFFER,
+      data,
+      gl.STATIC_DRAW
+    );
+
+    return buffer;
+  }
+
+
+  // Draw indexed triangles
+  draw(programInfo) {
+    const gl =
+      this.gl;
+
+
+    gl.bindBuffer(
+      gl.ARRAY_BUFFER,
+      this.positionBuffer
+    );
+
+    gl.enableVertexAttribArray(
+      programInfo
+        .attribLocations
+        .position
+    );
+
     gl.vertexAttribPointer(
-      programInfo.attribLocations.position,
-      3,          // x, y, z
+      programInfo
+        .attribLocations
+        .position,
+      3,
       gl.FLOAT,
       false,
       0,
       0
     );
 
-    gl.uniform4fv(
-      programInfo.uniformLocations.color,
-      color
+
+    gl.bindBuffer(
+      gl.ARRAY_BUFFER,
+      this.normalBuffer
     );
 
-    for (const range of ranges) {
-      gl.drawArrays(
-        gl.LINE_STRIP,
-        range.first,
-        range.count
+    gl.enableVertexAttribArray(
+      programInfo
+        .attribLocations
+        .normal
+    );
+
+    gl.vertexAttribPointer(
+      programInfo
+        .attribLocations
+        .normal,
+      3,
+      gl.FLOAT,
+      false,
+      0,
+      0
+    );
+
+
+    gl.bindBuffer(
+      gl.ELEMENT_ARRAY_BUFFER,
+      this.indexBuffer
+    );
+
+
+    gl.drawElements(
+      gl.TRIANGLES,
+      this.indexCount,
+      gl.UNSIGNED_SHORT,
+      0
+    );
+  }
+
+
+  // Delete old buffers
+  dispose() {
+    const gl =
+      this.gl;
+
+    if (this.positionBuffer) {
+      gl.deleteBuffer(
+        this.positionBuffer
+      );
+    }
+
+    if (this.normalBuffer) {
+      gl.deleteBuffer(
+        this.normalBuffer
+      );
+    }
+
+    if (this.indexBuffer) {
+      gl.deleteBuffer(
+        this.indexBuffer
       );
     }
   }
