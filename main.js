@@ -1,181 +1,397 @@
-'use strict';
+import { Model } from './Model.js';
 
-let gl;                         // The webgl context.
-let surface;                    // A surface model
-let shProgram;                  // A shader program
-let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+import {
+  mat4Multiply,
+  mat4Perspective,
+  mat4LookAt,
+  mat4RotationX,
+  mat4RotationY,
+} from './math.js';
 
-function deg2rad(angle) {
-    return angle * Math.PI / 180;
+const canvas =
+  document.getElementById(
+    'glCanvas'
+  );
+
+const gl =
+  canvas.getContext('webgl');
+
+if (!gl) {
+  throw new Error(
+    'WebGL is not supported by this browser.'
+  );
 }
 
-
-// Constructor
-function Model(name) {
-    this.name = name;
-    this.iVertexBuffer = gl.createBuffer();
-    this.count = 0;
-
-    this.BufferData = function(vertices) {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
-
-        this.count = vertices.length/3;
-    }
-
-    this.Draw = function() {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
-   
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
-    }
-}
-
-
-// Constructor
-function ShaderProgram(name, program) {
-
-    this.name = name;
-    this.prog = program;
-
-    // Location of the attribute variable in the shader program.
-    this.iAttribVertex = -1;
-    // Location of the uniform specifying a color for the primitive.
-    this.iColor = -1;
-    // Location of the uniform matrix representing the combined transformation.
-    this.iModelViewProjectionMatrix = -1;
-
-    this.Use = function() {
-        gl.useProgram(this.prog);
-    }
-}
-
-
-/* Draws a colored cube, along with a set of coordinate axes.
- * (Note that the use of the above drawPrimitive function is not an efficient
- * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
+/*
+ * Very simple vertex shader.
+ * It receives one 3D vertex
+ * and transforms it by the
+ * Model-View-Projection matrix.
  */
-function draw() { 
-    gl.clearColor(0,0,0,1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
-    /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/8, 1, 8, 12); 
-    
-    /* Get the view matrix from the SimpleRotator object.*/
-    let modelView = spaceball.getViewMatrix();
+const vertexShaderSource = `
+  attribute vec3 aPosition;
 
-    let rotateToPointZero = m4.axisRotation([0.707,0.707,0], 0.7);
-    let translateToPointZero = m4.translation(0,0,-10);
+  uniform mat4 uMVP;
 
-    let matAccum0 = m4.multiply(rotateToPointZero, modelView );
-    let matAccum1 = m4.multiply(translateToPointZero, matAccum0 );
-        
-    /* Multiply the projection matrix times the modelview matrix to give the
-       combined transformation matrix, and send that to the shader program. */
-    let modelViewProjection = m4.multiply(projection, matAccum1 );
+  void main() {
+    gl_Position =
+      uMVP *
+      vec4(aPosition, 1.0);
+  }
+`;
 
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
-    
-    /* Draw the six faces of a cube, with different colors. */
-    gl.uniform4fv(shProgram.iColor, [1,1,0,1] );
-
-    surface.Draw();
-}
-
-function CreateSurfaceData()
-{
-    let vertexList = [];
-
-    for (let i=0; i<360; i+=5) {
-        vertexList.push( Math.sin(deg2rad(i)), 1, Math.cos(deg2rad(i)) );
-        vertexList.push( Math.sin(deg2rad(i)), 0, Math.cos(deg2rad(i)) );
-    }
-
-    return vertexList;
-}
-
-
-/* Initialize the WebGL context. Called from init() */
-function initGL() {
-    let prog = createProgram( gl, vertexShaderSource, fragmentShaderSource );
-
-    shProgram = new ShaderProgram('Basic', prog);
-    shProgram.Use();
-
-    shProgram.iAttribVertex              = gl.getAttribLocation(prog, "vertex");
-    shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
-    shProgram.iColor                     = gl.getUniformLocation(prog, "color");
-
-    surface = new Model('Surface');
-    surface.BufferData(CreateSurfaceData());
-
-    gl.enable(gl.DEPTH_TEST);
-}
-
-
-/* Creates a program for use in the WebGL context gl, and returns the
- * identifier for that program.  If an error occurs while compiling or
- * linking the program, an exception of type Error is thrown.  The error
- * string contains the compilation or linking error.  If no error occurs,
- * the program identifier is the return value of the function.
- * The second and third parameters are strings that contain the
- * source code for the vertex shader and for the fragment shader.
+/*
+ * Fragment shader.
+ * U- and V-curves receive
+ * different colors.
  */
-function createProgram(gl, vShader, fShader) {
-    let vsh = gl.createShader( gl.VERTEX_SHADER );
-    gl.shaderSource(vsh,vShader);
-    gl.compileShader(vsh);
-    if ( ! gl.getShaderParameter(vsh, gl.COMPILE_STATUS) ) {
-        throw new Error("Error in vertex shader:  " + gl.getShaderInfoLog(vsh));
-     }
-    let fsh = gl.createShader( gl.FRAGMENT_SHADER );
-    gl.shaderSource(fsh, fShader);
-    gl.compileShader(fsh);
-    if ( ! gl.getShaderParameter(fsh, gl.COMPILE_STATUS) ) {
-       throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
-    }
-    let prog = gl.createProgram();
-    gl.attachShader(prog,vsh);
-    gl.attachShader(prog, fsh);
-    gl.linkProgram(prog);
-    if ( ! gl.getProgramParameter( prog, gl.LINK_STATUS) ) {
-       throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
-    }
-    return prog;
+const fragmentShaderSource = `
+  precision mediump float;
+
+  uniform vec4 uColor;
+
+  void main() {
+    gl_FragColor = uColor;
+  }
+`;
+
+function createShader(
+  type,
+  source
+) {
+  const shader =
+    gl.createShader(type);
+
+  gl.shaderSource(
+    shader,
+    source
+  );
+
+  gl.compileShader(shader);
+
+  if (
+    !gl.getShaderParameter(
+      shader,
+      gl.COMPILE_STATUS
+    )
+  ) {
+    const message =
+      gl.getShaderInfoLog(shader);
+
+    gl.deleteShader(shader);
+
+    throw new Error(
+      `Shader compile error: ${message}`
+    );
+  }
+
+  return shader;
 }
 
+function createProgram(
+  vertexSource,
+  fragmentSource
+) {
+  const vertexShader =
+    createShader(
+      gl.VERTEX_SHADER,
+      vertexSource
+    );
 
-/**
- * initialization function that will be called when the page has loaded
+  const fragmentShader =
+    createShader(
+      gl.FRAGMENT_SHADER,
+      fragmentSource
+    );
+
+  const program =
+    gl.createProgram();
+
+  gl.attachShader(
+    program,
+    vertexShader
+  );
+
+  gl.attachShader(
+    program,
+    fragmentShader
+  );
+
+  gl.linkProgram(program);
+
+  if (
+    !gl.getProgramParameter(
+      program,
+      gl.LINK_STATUS
+    )
+  ) {
+    const message =
+      gl.getProgramInfoLog(
+        program
+      );
+
+    gl.deleteProgram(program);
+
+    throw new Error(
+      `Program link error: ${message}`
+    );
+  }
+
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+
+  return program;
+}
+
+const program =
+  createProgram(
+    vertexShaderSource,
+    fragmentShaderSource
+  );
+
+const programInfo = {
+  program,
+
+  attribLocations: {
+    position:
+      gl.getAttribLocation(
+        program,
+        'aPosition'
+      ),
+  },
+
+  uniformLocations: {
+    mvp:
+      gl.getUniformLocation(
+        program,
+        'uMVP'
+      ),
+
+    color:
+      gl.getUniformLocation(
+        program,
+        'uColor'
+      ),
+  },
+};
+
+/*
+ * Create Variant 17 model.
  */
-function init() {
-    let canvas;
-    try {
-        canvas = document.getElementById("webglcanvas");
-        gl = canvas.getContext("webgl");
-        if ( ! gl ) {
-            throw "Browser does not support WebGL";
-        }
-    }
-    catch (e) {
-        document.getElementById("canvas-holder").innerHTML =
-            "<p>Sorry, could not get a WebGL graphics context.</p>";
-        return;
-    }
-    try {
-        initGL();  // initialize the WebGL graphics context
-    }
-    catch (e) {
-        document.getElementById("canvas-holder").innerHTML =
-            "<p>Sorry, could not initialize the WebGL graphics context: " + e + "</p>";
-        return;
+const model =
+  new Model(gl, {
+    a: 1.0,
+    n: 6,
+    R: 3.0,
+
+    uCurveCount: 28,
+    vCurveCount: 19,
+
+    uSamples: 120,
+    vSamples: 120,
+  });
+
+/*
+ * Initial view.
+ */
+let rotationX = -0.95;
+let rotationY = 0.65;
+
+let cameraDistance = 8.0;
+
+/*
+ * Mouse control.
+ */
+let dragging = false;
+
+let previousMouseX = 0;
+let previousMouseY = 0;
+
+canvas.addEventListener(
+  'mousedown',
+  (event) => {
+    dragging = true;
+
+    previousMouseX =
+      event.clientX;
+
+    previousMouseY =
+      event.clientY;
+  }
+);
+
+window.addEventListener(
+  'mouseup',
+  () => {
+    dragging = false;
+  }
+);
+
+window.addEventListener(
+  'mousemove',
+  (event) => {
+    if (!dragging) {
+      return;
     }
 
-    spaceball = new TrackballRotator(canvas, draw, 0);
+    const dx =
+      event.clientX -
+      previousMouseX;
 
-    draw();
+    const dy =
+      event.clientY -
+      previousMouseY;
+
+    rotationY += dx * 0.01;
+    rotationX += dy * 0.01;
+
+    previousMouseX =
+      event.clientX;
+
+    previousMouseY =
+      event.clientY;
+  }
+);
+
+/*
+ * Mouse wheel = zoom.
+ */
+canvas.addEventListener(
+  'wheel',
+  (event) => {
+    event.preventDefault();
+
+    cameraDistance +=
+      event.deltaY * 0.01;
+
+    cameraDistance =
+      Math.max(
+        5.0,
+        Math.min(
+          14.0,
+          cameraDistance
+        )
+      );
+  },
+  {
+    passive: false,
+  }
+);
+
+function resizeCanvasToDisplaySize() {
+  const pixelRatio =
+    window.devicePixelRatio || 1;
+
+  const width =
+    Math.floor(
+      canvas.clientWidth *
+        pixelRatio
+    );
+
+  const height =
+    Math.floor(
+      canvas.clientHeight *
+        pixelRatio
+    );
+
+  if (
+    canvas.width !== width ||
+    canvas.height !== height
+  ) {
+    canvas.width = width;
+    canvas.height = height;
+  }
 }
+
+function render() {
+  resizeCanvasToDisplaySize();
+
+  gl.viewport(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  /*
+   * Depth test is important because
+   * the surface is three-dimensional.
+   */
+  gl.enable(
+    gl.DEPTH_TEST
+  );
+
+  gl.clearColor(
+    0.97,
+    0.97,
+    0.98,
+    1.0
+  );
+
+  gl.clear(
+    gl.COLOR_BUFFER_BIT |
+    gl.DEPTH_BUFFER_BIT
+  );
+
+  gl.useProgram(
+    programInfo.program
+  );
+
+  const aspect =
+    canvas.width /
+    canvas.height;
+
+  const projection =
+    mat4Perspective(
+      Math.PI / 4,
+      aspect,
+      0.1,
+      100.0
+    );
+
+  const view =
+    mat4LookAt(
+      [0, 0, cameraDistance],
+      [0, 0, 0],
+      [0, 1, 0]
+    );
+
+  const rotateX =
+    mat4RotationX(
+      rotationX
+    );
+
+  const rotateY =
+    mat4RotationY(
+      rotationY
+    );
+
+  const modelMatrix =
+    mat4Multiply(
+      rotateY,
+      rotateX
+    );
+
+  const viewModel =
+    mat4Multiply(
+      view,
+      modelMatrix
+    );
+
+  const mvp =
+    mat4Multiply(
+      projection,
+      viewModel
+    );
+
+  model.draw(
+    programInfo,
+    mvp
+  );
+
+  requestAnimationFrame(
+    render
+  );
+}
+
+render();
