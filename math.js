@@ -1,8 +1,17 @@
 export function mat4Multiply(a, b) {
-  const out = new Float32Array(16);
+  const out =
+    new Float32Array(16);
 
-  for (let column = 0; column < 4; column++) {
-    for (let row = 0; row < 4; row++) {
+  for (
+    let column = 0;
+    column < 4;
+    column++
+  ) {
+    for (
+      let row = 0;
+      row < 4;
+      row++
+    ) {
       out[column * 4 + row] =
         a[0 * 4 + row] *
           b[column * 4 + 0] +
@@ -18,6 +27,7 @@ export function mat4Multiply(a, b) {
   return out;
 }
 
+
 export function mat4Perspective(
   fovyRadians,
   aspect,
@@ -26,7 +36,9 @@ export function mat4Perspective(
 ) {
   const f =
     1.0 /
-    Math.tan(fovyRadians / 2);
+    Math.tan(
+      fovyRadians / 2
+    );
 
   const nf =
     1 /
@@ -49,24 +61,33 @@ export function mat4Perspective(
   ]);
 }
 
+
 export function mat4LookAt(
   eye,
   center,
   up
 ) {
-  let zx = eye[0] - center[0];
-  let zy = eye[1] - center[1];
-  let zz = eye[2] - center[2];
+  let zx =
+    eye[0] - center[0];
 
-  let len = Math.hypot(
-    zx,
-    zy,
-    zz
-  );
+  let zy =
+    eye[1] - center[1];
+
+  let zz =
+    eye[2] - center[2];
+
+
+  let len =
+    Math.hypot(
+      zx,
+      zy,
+      zz
+    );
 
   zx /= len;
   zy /= len;
   zz /= len;
+
 
   let xx =
     up[1] * zz -
@@ -80,15 +101,18 @@ export function mat4LookAt(
     up[0] * zy -
     up[1] * zx;
 
-  len = Math.hypot(
-    xx,
-    xy,
-    xz
-  );
+
+  len =
+    Math.hypot(
+      xx,
+      xy,
+      xz
+    );
 
   xx /= len;
   xy /= len;
   xz /= len;
+
 
   const yx =
     zy * xz -
@@ -101,6 +125,7 @@ export function mat4LookAt(
   const yz =
     zx * xy -
     zy * xx;
+
 
   return new Float32Array([
     xx, yx, zx, 0,
@@ -131,9 +156,13 @@ export function mat4LookAt(
   ]);
 }
 
+
 export function mat4RotationX(angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
+  const c =
+    Math.cos(angle);
+
+  const s =
+    Math.sin(angle);
 
   return new Float32Array([
     1, 0, 0, 0,
@@ -146,9 +175,13 @@ export function mat4RotationX(angle) {
   ]);
 }
 
+
 export function mat4RotationY(angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
+  const c =
+    Math.cos(angle);
+
+  const s =
+    Math.sin(angle);
 
   return new Float32Array([
     c, 0, -s, 0,
@@ -161,14 +194,20 @@ export function mat4RotationY(angle) {
   ]);
 }
 
+
 // Transform a 3D point by a 4x4 matrix
 export function mat4TransformPoint(
   matrix,
   point
 ) {
-  const x = point[0];
-  const y = point[1];
-  const z = point[2];
+  const x =
+    point[0];
+
+  const y =
+    point[1];
+
+  const z =
+    point[2];
 
   return [
     matrix[0] * x +

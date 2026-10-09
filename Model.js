@@ -7,12 +7,20 @@
  */
 
 export class Model {
-  constructor(gl, options = {}) {
+  constructor(
+    gl,
+    options = {}
+  ) {
     this.gl = gl;
 
-    this.a = options.a ?? 1.0;
-    this.n = options.n ?? 6;
-    this.R = options.R ?? 3.0;
+    this.a =
+      options.a ?? 1.0;
+
+    this.n =
+      options.n ?? 6;
+
+    this.R =
+      options.R ?? 3.0;
 
     this.uSegments =
       options.uSegments ?? 40;
@@ -25,6 +33,7 @@ export class Model {
     this.indices = [];
 
     this.buildGeometry();
+
 
     this.positionData =
       new Float32Array(
@@ -40,6 +49,7 @@ export class Model {
       new Uint16Array(
         this.indices
       );
+
 
     this.positionBuffer =
       this.createArrayBuffer(
@@ -64,10 +74,12 @@ export class Model {
   // Calculate one point of the surface
   surfacePoint(u, v) {
     const x =
-      u * Math.cos(v);
+      u *
+      Math.cos(v);
 
     const y =
-      u * Math.sin(v);
+      u *
+      Math.sin(v);
 
     const z =
       this.a *
@@ -80,12 +92,19 @@ export class Model {
         this.R
       );
 
-    return [x, y, z];
+    return [
+      x,
+      y,
+      z
+    ];
   }
 
 
   // Get vertex index on a ring
-  ringIndex(ring, vIndex) {
+  ringIndex(
+    ring,
+    vIndex
+  ) {
     const wrappedV =
       (
         vIndex +
@@ -355,7 +374,9 @@ export class Model {
           nz
         );
 
-      if (length < 1e-8) {
+      if (
+        length < 1e-8
+      ) {
         continue;
       }
 
@@ -364,7 +385,7 @@ export class Model {
       nz /= length;
 
 
-      // Add normal to all triangle vertices
+      // Add normal to triangle vertices
       this.addNormal(
         ia,
         nx,
@@ -419,7 +440,9 @@ export class Model {
           nz
         );
 
-      if (length > 1e-8) {
+      if (
+        length > 1e-8
+      ) {
         nx /= length;
         ny /= length;
         nz /= length;
@@ -586,19 +609,25 @@ export class Model {
     const gl =
       this.gl;
 
-    if (this.positionBuffer) {
+    if (
+      this.positionBuffer
+    ) {
       gl.deleteBuffer(
         this.positionBuffer
       );
     }
 
-    if (this.normalBuffer) {
+    if (
+      this.normalBuffer
+    ) {
       gl.deleteBuffer(
         this.normalBuffer
       );
     }
 
-    if (this.indexBuffer) {
+    if (
+      this.indexBuffer
+    ) {
       gl.deleteBuffer(
         this.indexBuffer
       );
