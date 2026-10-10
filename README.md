@@ -1,101 +1,66 @@
-# PA2 — Filled Surface and Phong Shading
+# Control Task — WebGL Normal Mapping — Variant 17
 
-## Variant
+This practical assignment extends PA#2 using its parametric surface, Phong lighting, facet-averaged vertex normals, model rotation, zoom, U/V mesh granularity controls and moving point-light sphere.
 
-17
+## Variant 17: prioritize tangent
 
-- Shading: Phong
-- Vertex normal: Facet Average
+During Gram–Schmidt orthogonalization **tangent T has priority**:
 
-## Surface
+```glsl
+vec3 T = normalize(vTangentView);
+vec3 N0 = normalize(vNormalView);
+vec3 N = normalize(N0 - dot(N0, T) * T);
+vec3 B = normalize(cross(N, T));
+mat3 TBN = mat3(T, B, N);
+```
+
+This keeps T unchanged and removes its component from N, unlike normal-priority orthogonalization.
+
+## Three separate texture files
+
+- `textures/diffuse.png` — modulates the **diffuse** lighting component (and is used for the ambient base color).
+- `textures/specular.png` — modulates the **specular** reflection component.
+- `textures/normal.png` — tangent-space normals sampled **per pixel**, converted from RGB to the interval [-1, 1], then transformed with TBN.
+
+The texture images were generated together from a periodic relief pattern, so the height features correspond to the diffuse/specular details. They are included in the repository. The optional `make_textures.py` script can regenerate them (requires Python, NumPy and Pillow); running the site does NOT require Python.
+
+## Original PA#2 retained
 
 Surface of Revolution of a General Sinusoid:
 
-x(u, v) = u cos(v)
+- `x = u cos(v)`
+- `y = u sin(v)`
+- `z = a cos(nπu/R)`
+- `a = 1`, `n = 6`, `R = 3`; `0 ≤ u ≤ R` and `0 ≤ v < 2π`.
 
-y(u, v) = u sin(v)
+The surface uses indexed triangle rendering, facet-average vertex normals, and per-fragment Phong shading. The new mesh provides tangent vectors and UV coordinates. The seam is duplicated for UV interpolation while normal vectors are welded across it. The normal-mapping TBN frame is built in the fragment shader.
 
-z(u, v) = a cos(nπu / R)
+## How to run
 
-Parameters:
+1. Open this folder in **Visual Studio Code**.
+2. Install the **Live Server** extension.
+3. Right-click `index.html` and select **Open with Live Server**.
+4. Open the displayed local URL, normally `http://127.0.0.1:5500/index.html`.
 
-- a = 1
-- n = 6
-- R = 3
-- 0 <= u <= R
-- 0 <= v < 2π
+Do not open the HTML directly using `file://`, because ES modules and texture loading require an HTTP server.
 
-## Geometry
+## Controls and demo
 
-The surface is rendered using filled indexed triangles.
+- Drag with left mouse button to rotate.
+- Scroll wheel to zoom.
+- U/V granularity sliders rebuild the surface mesh.
+- Toggle **Diffuse texture**, **Specular texture**, and **Normal texture** independently to compare the three effects.
+- The small yellow sphere marks the moving point light.
 
-Vertex coordinates are stored in a VBO.
+## File organization
 
-Vertex normals are stored in a separate VBO.
+- `index.html` — WebGL canvas and controls.
+- `main.js` — shaders, three texture units, TBN, lighting and animation.
+- `Model.js` — surface geometry, UVs, tangent calculation and facet-average normals.
+- `math.js` — PA#2 matrix utilities.
+- `textures/` — three PNG textures.
+- `make_textures.py` — optional reproducible texture generator.
 
-Triangle connectivity is stored in an index buffer
-(ELEMENT_ARRAY_BUFFER).
+## Submission
 
-Rendering is performed with:
-
-gl.drawElements(gl.TRIANGLES, ...)
-
-## Surface granularity
-
-Two sliders control the number of subdivisions:
-
-- U granularity
-- V granularity
-
-Changing either slider rebuilds the triangle mesh.
-
-## Vertex normals
-
-Variant 17 uses Facet Average vertex normals.
-
-For every triangle:
-
-1. Two triangle edges are calculated.
-2. Their cross product gives the facet normal.
-3. The facet normal is normalized.
-4. The normalized facet normal is added to all adjacent vertices.
-5. The resulting vertex normals are normalized.
-
-## Phong shading
-
-Phong shading is implemented in the fragment shader.
-
-The vertex shader passes interpolated:
-
-- vertex position
-- vertex normal
-
-to the fragment shader.
-
-The fragment shader calculates:
-
-Irgb = Ambient + Diffuse + Specular
-
-## Point light
-
-One point light source moves in a circular trajectory around the surface.
-
-The light coordinates are transformed by the ModelView matrix
-before being passed to the GPU as a uniform.
-
-The light source is represented by a small yellow sphere in the scene.
-
-The sphere follows the same circular trajectory as the point light,
-which makes it possible to visually verify the lighting direction.
-
-## Projection
-
-Perspective projection is used.
-
-## Controls
-
-- Mouse drag — rotate
-- Mouse wheel — zoom
-- U slider — change U granularity
-- V slider — change V granularity
-- Yellow sphere — point light source
+Submit a GitHub repository **link to the `ControlTask` branch**, a **single screenshot**, and a **2-minute video** as requested in the assignment instructions.
