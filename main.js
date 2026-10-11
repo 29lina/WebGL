@@ -37,6 +37,8 @@ uniform sampler2D uNormalMap;
 uniform bool uUseDiffuse;
 uniform bool uUseSpecular;
 uniform bool uUseNormal;
+uniform vec2 uTexturePivot;
+uniform float uTextureScale;
 varying vec3 vPositionView;
 varying vec3 vNormalView;
 varying vec3 vTangentView;
@@ -49,11 +51,13 @@ void main() {
   vec3 B = normalize(cross(N, T));
   mat3 TBN = mat3(T, B, N);
 
-  vec3 mapNormal = texture2D(uNormalMap, vTexCoord).rgb * 2.0 - 1.0;
+  // Transform coordinates rather than model geometry: odd variant 17.
+  vec2 transformedUV = uTexturePivot + (vTexCoord - uTexturePivot) * uTextureScale;
+  vec3 mapNormal = texture2D(uNormalMap, transformedUV).rgb * 2.0 - 1.0;
   vec3 finalNormal = uUseNormal ? normalize(TBN * normalize(mapNormal)) : N;
-  vec3 diffuseColor = uUseDiffuse ? texture2D(uDiffuseMap, vTexCoord).rgb
+  vec3 diffuseColor = uUseDiffuse ? texture2D(uDiffuseMap, transformedUV).rgb
                                    : vec3(0.25, 0.55, 0.90);
-  vec3 specularColor = uUseSpecular ? texture2D(uSpecularMap, vTexCoord).rgb
+  vec3 specularColor = uUseSpecular ? texture2D(uSpecularMap, transformedUV).rgb
                                      : vec3(1.0);
   vec3 L = normalize(uLightPositionView - vPositionView);
   vec3 V = normalize(-vPositionView);
@@ -74,12 +78,15 @@ attribute vec3 aPosition;
 uniform mat4 uModelView;
 uniform mat4 uProjection;
 uniform vec3 uLightPosition;
+uniform float uSphereRadius;
 void main() {
   gl_Position = uProjection * uModelView *
-    vec4(aPosition * 0.18 + uLightPosition, 1.0);
+    vec4(aPosition * uSphereRadius + uLightPosition, 1.0);
 }`;
 const lightFS = `precision mediump float;
 void main() { gl_FragColor = vec4(1.0, 0.9, 0.2, 1.0); }`;
+const markerFS = `precision mediump float;
+void main() { gl_FragColor = vec4(1.0, 0.17, 0.55, 1.0); }`;
 
 function compile(type, source) {
   const shader = gl.createShader(type);
@@ -113,9 +120,11 @@ function getInfo(program, attributes, uniforms) {
 const surface = getInfo(createProgram(vertexShader, fragmentShader),
   [['position', 'aPosition'], ['normal', 'aNormal'], ['tangent', 'aTangent'], ['texCoord', 'aTexCoord']],
   ['uModelView', 'uProjection', 'uLightPositionView', 'uDiffuseMap', 'uSpecularMap', 'uNormalMap',
-    'uUseDiffuse', 'uUseSpecular', 'uUseNormal']);
+    'uUseDiffuse', 'uUseSpecular', 'uUseNormal', 'uTexturePivot', 'uTextureScale']);
 const light = getInfo(createProgram(lightVS, lightFS),
-  [['position', 'aPosition']], ['uModelView', 'uProjection', 'uLightPosition']);
+  [['position', 'aPosition']], ['uModelView', 'uProjection', 'uLightPosition', 'uSphereRadius']);
+const marker = getInfo(createProgram(lightVS, markerFS),
+  [['position', 'aPosition']], ['uModelView', 'uProjection', 'uLightPosition', 'uSphereRadius']);
 
 function loadTexture(path, unit, fallbackRGBA) {
   const texture = gl.createTexture();
@@ -171,6 +180,69 @@ function buildLightSphere(latSegments = 14, lonSegments = 20) {
 const lightSphere = buildLightSphere();
 const uSlider = document.querySelector('#uSlider');
 const vSlider = document.querySelector('#vSlider');
+const textureScaleSlider = document.querySelector('#textureScale');
+const textureScaleValue = document.querySelector('#textureScaleValue');
+const pivotUValue = document.querySelector('#pivotUValue');
+const pivotVValue = document.querySelector('#pivotVValue');
+// Texturing coordinates: U is angular, V is radial (see Model.js).
+const pivot = { u: 0.35, v: 0.55 };
+let textureScale = 1.0;
+function updatePivotLabels() {
+  pivotUValue.textContent = pivot.u.toFixed(2);
+  pivotVValue.textContent = pivot.v.toFixed(2);
+}
+textureScaleSlider.addEventListener('input', () => {
+  textureScale = Number(textureScaleSlider.value);
+  textureScaleValue.textContent = textureScale.toFixed(2) + 'x';
+});
+// Keyboard control: works with English and Ukrainian layouts
+window.addEventListener('keydown', (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+  const key = event.code;
+
+  if (!['KeyA', 'KeyD', 'KeyW', 'KeyS'].includes(key)) return;
+
+  const target = event.target;
+
+  if (
+    target?.isContentEditable ||
+    (
+      ['INPUT', 'TEXTAREA'].includes(target?.tagName) &&
+      target.type !== 'range' &&
+      target.type !== 'checkbox'
+    )
+  ) return;
+
+  event.preventDefault();
+
+  const step = 0.02;
+
+  if (key === 'KeyA') {
+    pivot.u = (pivot.u - step + 1) % 1;
+  }
+
+  if (key === 'KeyD') {
+    pivot.u = (pivot.u + step) % 1;
+  }
+
+  if (key === 'KeyW') {
+    pivot.v = Math.min(1, pivot.v + step);
+  }
+
+  if (key === 'KeyS') {
+    pivot.v = Math.max(0.02, pivot.v - step);
+  }
+
+  updatePivotLabels();
+});
+document.querySelector('#resetTexture').addEventListener('click', () => {
+  pivot.u = 0.35; pivot.v = 0.55; textureScale = 1;
+  textureScaleSlider.value = '1';
+  textureScaleValue.textContent = '1.00x';
+  updatePivotLabels();
+});
+updatePivotLabels();
 let model = new Model(gl, { a: 1, n: 6, R: 3, uSegments: +uSlider.value,
   vSegments: +vSlider.value });
 function rebuildModel() {
@@ -197,15 +269,16 @@ canvas.addEventListener('wheel', e => {
   cameraDistance = Math.max(5, Math.min(14, cameraDistance + e.deltaY * 0.01));
 }, { passive: false });
 
-function drawLight(modelView, projection, lightPosition) {
-  gl.useProgram(light.program);
+function drawSphere(programInfo, modelView, projection, spherePosition, radius) {
+  gl.useProgram(programInfo.program);
   gl.bindBuffer(gl.ARRAY_BUFFER, lightSphere.vertex);
-  gl.enableVertexAttribArray(light.attribLocations.position);
-  gl.vertexAttribPointer(light.attribLocations.position, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(programInfo.attribLocations.position);
+  gl.vertexAttribPointer(programInfo.attribLocations.position, 3, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lightSphere.elements);
-  gl.uniformMatrix4fv(light.uniformLocations.uModelView, false, modelView);
-  gl.uniformMatrix4fv(light.uniformLocations.uProjection, false, projection);
-  gl.uniform3fv(light.uniformLocations.uLightPosition, lightPosition);
+  gl.uniformMatrix4fv(programInfo.uniformLocations.uModelView, false, modelView);
+  gl.uniformMatrix4fv(programInfo.uniformLocations.uProjection, false, projection);
+  gl.uniform3fv(programInfo.uniformLocations.uLightPosition, spherePosition);
+  gl.uniform1f(programInfo.uniformLocations.uSphereRadius, radius);
   gl.drawElements(gl.TRIANGLES, lightSphere.count, gl.UNSIGNED_SHORT, 0);
 }
 function render(milliseconds) {
@@ -243,8 +316,13 @@ function render(milliseconds) {
   gl.uniform1i(uni.uUseDiffuse, document.querySelector('#diffuseEnabled').checked ? 1 : 0);
   gl.uniform1i(uni.uUseSpecular, document.querySelector('#specularEnabled').checked ? 1 : 0);
   gl.uniform1i(uni.uUseNormal, document.querySelector('#normalEnabled').checked ? 1 : 0);
+  gl.uniform2f(uni.uTexturePivot, pivot.u, pivot.v);
+  gl.uniform1f(uni.uTextureScale, textureScale);
   model.draw(surface);
-  drawLight(modelView, projection, lightModel);
+  drawSphere(light, modelView, projection, lightModel, 0.18);
+  // Marker follows the mathematical surface, not the image plane.
+  const markerPosition = model.point(pivot.v * model.R, pivot.u * Math.PI * 2);
+  drawSphere(marker, modelView, projection, markerPosition, 0.09);
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);

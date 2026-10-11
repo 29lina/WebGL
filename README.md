@@ -1,66 +1,39 @@
-# Control Task — WebGL Normal Mapping — Variant 17
+# CGW — Operations on Texture Coordinates — Variant 17
 
-This practical assignment extends PA#2 using its parametric surface, Phong lighting, facet-averaged vertex normals, model rotation, zoom, U/V mesh granularity controls and moving point-light sphere.
+**Task:** scale textures around a user-defined point on the parametric surface (odd variant).
 
-## Variant 17: prioritize tangent
+The project reuses the ControlTask code: a sinusoidal surface of revolution, Phong lighting, diffuse/specular/normal maps, tangent-priority Gram–Schmidt orthogonalization, adjustable mesh, moving light source, mouse rotation, and zoom.
 
-During Gram–Schmidt orthogonalization **tangent T has priority**:
+## Features
+- The Texture scale slider controls texture-coordinate scaling between `0.25x` and `4.00x`.
+- `A`/`D`: decrease/increase angular UV coordinate `u` (wraps around the surface).
+- `W`/`S`: increase/decrease radial UV coordinate `v` (clamped within the surface).
+- The pink sphere visually indicates the pivot point on the 3D surface.
+- The yellow sphere indicates the animated point light.
+- Reset scale and pivot restores `(u,v)=(0.35,0.55)` and scale `1.0`.
+- The same transformed UV is used for all three texture samplers.
 
-```glsl
-vec3 T = normalize(vTangentView);
-vec3 N0 = normalize(vNormalView);
-vec3 N = normalize(N0 - dot(N0, T) * T);
-vec3 B = normalize(cross(N, T));
-mat3 TBN = mat3(T, B, N);
-```
+## Theory
+The UV transformation is `uvNew = pivot + (uvOld - pivot) * scale`. Geometry is unchanged. When `scale > 1` the pattern repeats more frequently (tiles look smaller); when `0 < scale < 1` the pattern becomes larger. The selected pivot remains invariant under scaling.
 
-This keeps T unchanged and removes its component from N, unlike normal-priority orthogonalization.
+The original Model.js assigns `uv.push(j / V, i / U)`: texture `u` is the angular component and texture `v` is the radial component. The marker position therefore uses `model.point(pivot.v * R, pivot.u * 2π)`.
 
-## Three separate texture files
+## Run (Visual Studio Code + Live Server)
+1. Open the project folder in **Visual Studio Code**.
+2. Install the **Live Server** extension if it is not installed yet.
+3. Right-click `index.html` in Explorer and select **Open with Live Server** (or use **Go Live**).
+4. The project opens in the browser using the local address provided by Live Server, commonly `http://127.0.0.1:5500/`.
+5. With the page focused, use **A/D/W/S** to move the pink pivot and **Texture scale** to adjust the texture pattern.
 
-- `textures/diffuse.png` — modulates the **diffuse** lighting component (and is used for the ambient base color).
-- `textures/specular.png` — modulates the **specular** reflection component.
-- `textures/normal.png` — tangent-space normals sampled **per pixel**, converted from RGB to the interval [-1, 1], then transformed with TBN.
+The site requires WebGL and must be served over local HTTP, not `file://`. Python is **not** needed to run the site with Live Server; the optional `make_textures.py` utility only regenerates texture files and requires NumPy and Pillow.
 
-The texture images were generated together from a periodic relief pattern, so the height features correspond to the diffuse/specular details. They are included in the repository. The optional `make_textures.py` script can regenerate them (requires Python, NumPy and Pillow); running the site does NOT require Python.
-
-## Original PA#2 retained
-
-Surface of Revolution of a General Sinusoid:
-
-- `x = u cos(v)`
-- `y = u sin(v)`
-- `z = a cos(nπu/R)`
-- `a = 1`, `n = 6`, `R = 3`; `0 ≤ u ≤ R` and `0 ≤ v < 2π`.
-
-The surface uses indexed triangle rendering, facet-average vertex normals, and per-fragment Phong shading. The new mesh provides tangent vectors and UV coordinates. The seam is duplicated for UV interpolation while normal vectors are welded across it. The normal-mapping TBN frame is built in the fragment shader.
-
-## How to run
-
-1. Open this folder in **Visual Studio Code**.
-2. Install the **Live Server** extension.
-3. Right-click `index.html` and select **Open with Live Server**.
-4. Open the displayed local URL, normally `http://127.0.0.1:5500/index.html`.
-
-Do not open the HTML directly using `file://`, because ES modules and texture loading require an HTTP server.
-
-## Controls and demo
-
-- Drag with left mouse button to rotate.
-- Scroll wheel to zoom.
-- U/V granularity sliders rebuild the surface mesh.
-- Toggle **Diffuse texture**, **Specular texture**, and **Normal texture** independently to compare the three effects.
-- The small yellow sphere marks the moving point light.
-
-## File organization
-
-- `index.html` — WebGL canvas and controls.
-- `main.js` — shaders, three texture units, TBN, lighting and animation.
-- `Model.js` — surface geometry, UVs, tangent calculation and facet-average normals.
-- `math.js` — PA#2 matrix utilities.
-- `textures/` — three PNG textures.
-- `make_textures.py` — optional reproducible texture generator.
+## Project layout
+- `index.html`: page UI.
+- `main.js`: vertex/fragment shaders, texture transform, input handling, rendering, spheres.
+- `Model.js`: model generation, normals, tangents and UV coordinates.
+- `math.js`: matrix functions.
+- `textures/*.png`: diffuse, specular and normal maps.
+- `make_textures.py`: optional generator.
 
 ## Submission
-
-Submit a GitHub repository **link to the `ControlTask` branch**, a **single screenshot**, and a **2-minute video** as requested in the assignment instructions.
+Submit the GitHub repository through the teacher's form. Practical work **must be in the `CGW` branch** and that branch must contain the PDF paper/report. Do not confuse with the older `ControlTask` branch.
